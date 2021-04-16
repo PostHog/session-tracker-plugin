@@ -1,21 +1,21 @@
 {
-    "name": "posthog-helloworld-plugin",
+    "name": "session-tracker",
     "version": "0.0.1",
-    "description": "Track if a given event is the first event of this type for a user.",
+    "description": "Advanced session tracking for PostHog.",
     "main": "index.js",
     "scripts": {
         "test": "jest"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/PostHog/first-time-event-tracker.git"
+        "url": "git+https://github.com/PostHog/session-tracker-plugin.git"
     },
     "author": "",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/PostHog/first-time-event-tracker/issues"
+        "url": "https://github.com/PostHog/session-tracker-plugin/issues"
     },
-    "homepage": "https://github.com/PostHog/first-time-event-tracker#readme",
+    "homepage": "https://github.com/PostHog/session-tracker-plugin#readme",
     "config": {
         "bar": {
             "name": "What's in the bar?",
