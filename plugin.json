@@ -2,6 +2,6 @@
   "name": "Session Tracker",
   "url": "https://github.com/PostHog/session-tracker-plugin",
   "description": "Advanced session tracking for PostHog.",
-  "main": "index.js",
+  "main": "index.ts",
   "config": []
 }
