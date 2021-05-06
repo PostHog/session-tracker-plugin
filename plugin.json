@@ -3,6 +3,7 @@
   "url": "https://github.com/PostHog/session-tracker-plugin",
   "description": "Advanced session tracking for PostHog.",
   "main": "index.ts",
+  "posthogVersion": ">= 1.25.0",
   "config": [
     {
       "markdown": "## Important Note For Self-Hosted Users \nThis plugin leverages database storage to work. We estimate that it will use about 3MB of storage for every 10000 users tracked."

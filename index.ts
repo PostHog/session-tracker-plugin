@@ -1,72 +1,45 @@
-import { PluginEvent, PluginMeta, PluginAttachment } from '@posthog/plugin-scaffold'
+import {
+    PluginEvent,
+    CreatePluginMeta,
+    MetaJobsInput,
+} from '../plugin-scaffold/src/types'
 
 declare var posthog: {
-    capture: (eventName: string, properties: Record<string,any>) => void
+    capture: (eventName: string, properties: Record<string, any>) => void
 }
 
-async function processEvent(event: PluginEvent, { storage }: PluginMeta) {
-    if (['session_started', 'session_ended'].includes(event.event)) {
-        return event
+type Meta = CreatePluginMeta<{
+    jobs: {
+        checkIfSessionIsOver: { distinct_id: string }
     }
+}>
 
-    const THIRTY_MINUTES = 1000*60*30
-
-    // Last event by the user
-    const userLastSeen = await storage.get(`last_seen_${event.distinct_id}`, 0) as number
-
-    // Last registered session_start by the user 
-    const userLastSessionStarted = await storage.get(`last_session_started_${event.distinct_id}`, 0) as number
-
-    let isFirstEventInSession = false
-
-    if (!event.properties) {
-        event['properties'] = {}
+export async function processEvent(event: PluginEvent, { cache, jobs }: Meta) {
+    // check if we're the first one to increment this key in the last 30 minutes
+    if ((await cache.incr(`session_${event.distinct_id}`)) === 0) {
+        // if so, dispatch a session start event
+        posthog.capture('session start', { distinct_id: event.distinct_id })
+        // and launch a job to check in 30min if the session is still alive
+        jobs.checkIfSessionIsOver({ distinct_id: event.distinct_id }).runIn(30, 'minutes')
     }
+    // make the key expire in 30min
+    cache.expire(`session_${event.distinct_id}`, 30 * 60)
 
-    const timestamp = event.timestamp
-
-    if (timestamp) {
-        const parsedTimestamp = new Date(timestamp).getTime()
-        const timeSinceLastSeen = parsedTimestamp - userLastSeen
-        isFirstEventInSession = timeSinceLastSeen > THIRTY_MINUTES
-
-        storage.set(`last_seen_${event.distinct_id}`, parsedTimestamp)
-
-        // If it's been over 30min since the user had an event, it's a new session
-        if (isFirstEventInSession) {
-            posthog.capture(
-                'session_started', 
-                { 
-                    distinct_id: event.distinct_id, 
-                    time_since_last_seen: !userLastSeen ? 0 : timeSinceLastSeen,
-                    // backdate to when session _actually_ started
-                    timestamp: new Date(timestamp).toISOString(), 
-                    trigger_event: event.event
-                }
-            )
-            storage.set(`last_session_started_${event.distinct_id}`, parsedTimestamp)
-
-            // If we've started a new session, another session must have ended
-            if (userLastSessionStarted) {
-                posthog.capture(
-                    'session_ended',
-                    {
-                        // backdate the session end to the timestamp last event before the new session
-                        timestamp: new Date(userLastSeen).toISOString(), 
-                        distinct_id: event.distinct_id, 
-                        session_duration: userLastSeen - userLastSessionStarted
-                    }
-                )
-            }
-        }
-        
-    }
-
-    event.properties['is_first_event_in_session'] = isFirstEventInSession
-
+    // return the event because we don't want to lose it
     return event
 }
 
-module.exports = {
-    processEvent,
+export const jobs: MetaJobsInput<Meta> = {
+    // a background job to check if a session is still in progress
+    checkIfSessionIsOver: async ({ distinct_id }, { jobs, cache }) => {
+        // check if there's a key that has not expired
+        const ping = await cache.get(`session_${distinct_id}`, null)
+        if (!ping) {
+            // if it expired, dispatch the session end event
+            posthog.capture('session end', { distinct_id })
+        } else {
+            // if the key is still there, check again in a minute
+            jobs.checkIfSessionIsOver({ distinct_id }).runIn(1, 'minute')
+        }
+    },
 }
