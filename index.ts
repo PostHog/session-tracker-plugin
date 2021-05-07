@@ -16,7 +16,7 @@ type Meta = CreatePluginMeta<{
 
 export async function processEvent(event: PluginEvent, { cache, jobs }: Meta) {
     // check if we're the first one to increment this key in the last 30 minutes
-    if ((await cache.incr(`session_${event.distinct_id}`)) === 0) {
+    if ((await cache.incr(`session_${event.distinct_id}`)) === 1) {
         // if so, dispatch a session start event
         posthog.capture('session start', { distinct_id: event.distinct_id })
         // and launch a job to check in 30min if the session is still alive
