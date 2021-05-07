@@ -476,10 +476,10 @@
     lodash.set "^4.3.2"
     maxmind "^4.2.0"
 
-"@posthog/plugin-scaffold@^0.5.0":
-  version "0.5.0"
-  resolved "https://registry.yarnpkg.com/@posthog/plugin-scaffold/-/plugin-scaffold-0.5.0.tgz#0d46d0f39700ebf3cf613ba80a2c9a4dc6d13805"
-  integrity sha512-gE12hy/gYdMOYLP/PhbC2XfqvCeoXrdkFeR9HFfSK31RWU+aW+JMK7pi+CATatXfNpMCvjGxIYJk3QBPwm0WDA==
+"@posthog/plugin-scaffold@^0.7.1":
+  version "0.7.1"
+  resolved "https://registry.yarnpkg.com/@posthog/plugin-scaffold/-/plugin-scaffold-0.7.1.tgz#801dce0d55e77851fc054bd8a6284de78b90f0a3"
+  integrity sha512-QkMkNpyGWLen6FCmPjpHmUsalHa8e5/6eenUS/vG4SKWMORod0VDVlDYnInUXzS+HYhIjKSlgprwAyCp+2KWfQ==
   dependencies:
     "@maxmind/geoip2-node" "^2.3.1"
 
@@ -2813,11 +2813,6 @@ posix-character-classes@^0.1.0:
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/posix-character-classes/-/posix-character-classes-0.1.1.tgz#01eac0fe3b5af71a2a6c02feabb8c1fef7e00eab"
   integrity sha1-AerA/jta9xoqbAL+q7jB/vfgDqs=
-
-posthog-plugins@^0.2.2:
-  version "0.2.2"
-  resolved "https://registry.yarnpkg.com/posthog-plugins/-/posthog-plugins-0.2.2.tgz#84bf2c7c50a3fea7a585187c9febda59ab774dd9"
-  integrity sha512-AFOKFexaCwKQ7+zjpM7g6Cj/75YF3QMx513xFahCHGAZrqrZuIPyY+xPvg1U4TA0J4P5OfzPz5tQYmPYcuppyw==
 
 prelude-ls@~1.1.2:
   version "1.1.2"

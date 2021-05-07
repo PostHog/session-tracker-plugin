@@ -1,10 +1,10 @@
-import { PluginEvent, CreatePluginMeta, MetaJobsInput } from '../plugin-scaffold/src/types'
+import { PluginEvent, PluginMeta, PluginJobs } from '@posthog/plugin-scaffold'
 
 declare var posthog: {
     capture: (eventName: string, properties: Record<string, any>) => void
 }
 
-type Meta = CreatePluginMeta<{
+type Meta = PluginMeta<{
     jobs: {
         checkIfSessionIsOver: { distinct_id: string }
     }
@@ -31,7 +31,7 @@ export async function onEvent(event: PluginEvent, { cache, jobs }: Meta) {
     await cache.set(`last_timestamp_${event.distinct_id}`, event.timestamp)
 }
 
-export const jobs: MetaJobsInput<Meta> = {
+export const jobs: PluginJobs<Meta> = {
     // a background job to check if a session is still in progress
     checkIfSessionIsOver: async ({ distinct_id }, { jobs, cache }) => {
         // check if there's a key that has not expired
