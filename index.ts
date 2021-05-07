@@ -1,8 +1,4 @@
-import {
-    PluginEvent,
-    CreatePluginMeta,
-    MetaJobsInput,
-} from '../plugin-scaffold/src/types'
+import { PluginEvent, CreatePluginMeta, MetaJobsInput } from '../plugin-scaffold/src/types'
 
 declare var posthog: {
     capture: (eventName: string, properties: Record<string, any>) => void
@@ -14,19 +10,25 @@ type Meta = CreatePluginMeta<{
     }
 }>
 
-export async function processEvent(event: PluginEvent, { cache, jobs }: Meta) {
-    // check if we're the first one to increment this key in the last 30 minutes
+const SESSION_LENGTH_MINUTES = 30
+const SESSION_START_EVENT = 'session start'
+const SESSION_END_EVENT = 'session end'
+
+export async function onEvent(event: PluginEvent, { cache, jobs }: Meta) {
+    // skip this for the session start/end events
+    if (event.event === SESSION_START_EVENT || event.event === SESSION_END_EVENT) {
+        return
+    }
+    // check if we're the first one to increment this key in the last ${SESSION_LENGTH_MINUTES} minutes
     if ((await cache.incr(`session_${event.distinct_id}`)) === 1) {
         // if so, dispatch a session start event
-        posthog.capture('session start', { distinct_id: event.distinct_id })
+        posthog.capture(SESSION_START_EVENT, { distinct_id: event.distinct_id, timestamp: event.timestamp })
         // and launch a job to check in 30min if the session is still alive
-        jobs.checkIfSessionIsOver({ distinct_id: event.distinct_id }).runIn(30, 'minutes')
+        await jobs.checkIfSessionIsOver({ distinct_id: event.distinct_id }).runIn(SESSION_LENGTH_MINUTES, 'minutes')
     }
-    // make the key expire in 30min
-    cache.expire(`session_${event.distinct_id}`, 30 * 60)
-
-    // return the event because we don't want to lose it
-    return event
+    // make the key expire in ${SESSION_LENGTH_MINUTES} min
+    await cache.expire(`session_${event.distinct_id}`, SESSION_LENGTH_MINUTES * 60)
+    await cache.set(`last_timestamp_${event.distinct_id}`, event.timestamp)
 }
 
 export const jobs: MetaJobsInput<Meta> = {
@@ -36,7 +38,12 @@ export const jobs: MetaJobsInput<Meta> = {
         const ping = await cache.get(`session_${distinct_id}`, null)
         if (!ping) {
             // if it expired, dispatch the session end event
-            posthog.capture('session end', { distinct_id })
+            const timestamp = await cache.get(
+                `last_timestamp_${distinct_id}`,
+                new Date(new Date().valueOf() - SESSION_LENGTH_MINUTES * 60000).toISOString()
+            )
+            await cache.set(`last_timestamp_${distinct_id}`, null)
+            posthog.capture(SESSION_END_EVENT, { distinct_id, timestamp: timestamp })
         } else {
             // if the key is still there, check again in a minute
             jobs.checkIfSessionIsOver({ distinct_id }).runIn(1, 'minute')
