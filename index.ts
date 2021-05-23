@@ -50,19 +50,18 @@ export const jobs: SessionTrackerPlugin['jobs'] = {
     // a background job to check if a session is still in progress
     checkIfSessionIsOver: async ({ distinct_id }, { jobs, cache, global }) => {
         // check if there's a key that has not expired
-        const ping = await cache.get(`session_${distinct_id}`, null)
+        const ping = await cache.get(`session_${distinct_id}`, undefined)
         if (!ping) {
             // if it expired, dispatch the session end event
-            const timestamp = await cache.get(
-                `last_timestamp_${distinct_id}`,
+            const timestamp =
+                (await cache.get(`last_timestamp_${distinct_id}`, undefined)) ||
                 new Date(new Date().valueOf() - global.sessionLength * 60000).toISOString()
-            )
 
             await cache.set(`last_timestamp_${distinct_id}`, undefined)
             posthog.capture(global.sessionEndEvent, { distinct_id, timestamp })
         } else {
             // if the key is still there, check again in a minute
-            jobs.checkIfSessionIsOver({ distinct_id }).runIn(1, 'minute')
+            await jobs.checkIfSessionIsOver({ distinct_id }).runIn(1, 'minute')
         }
     },
 }
