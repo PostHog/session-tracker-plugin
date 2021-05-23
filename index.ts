@@ -1,10 +1,10 @@
-import { PluginEvent, PluginMeta, PluginJobs } from '@posthog/plugin-scaffold'
+import { Plugin } from '@posthog/plugin-scaffold'
 
 declare var posthog: {
     capture: (eventName: string, properties: Record<string, any>) => void
 }
 
-type Meta = PluginMeta<{
+type SessionTrackerPlugin = Plugin<{
     jobs: {
         checkIfSessionIsOver: { distinct_id: string }
     }
@@ -14,7 +14,7 @@ const SESSION_LENGTH_MINUTES = 30
 const SESSION_START_EVENT = 'session start'
 const SESSION_END_EVENT = 'session end'
 
-export async function onEvent(event: PluginEvent, { cache, jobs }: Meta) {
+export const onEvent: SessionTrackerPlugin['onEvent'] = async (event, { cache, jobs }) => {
     // skip this for the session start/end events
     if (event.event === SESSION_START_EVENT || event.event === SESSION_END_EVENT) {
         return
@@ -31,7 +31,7 @@ export async function onEvent(event: PluginEvent, { cache, jobs }: Meta) {
     await cache.set(`last_timestamp_${event.distinct_id}`, event.timestamp)
 }
 
-export const jobs: PluginJobs<Meta> = {
+export const jobs: SessionTrackerPlugin['jobs'] = {
     // a background job to check if a session is still in progress
     checkIfSessionIsOver: async ({ distinct_id }, { jobs, cache }) => {
         // check if there's a key that has not expired
