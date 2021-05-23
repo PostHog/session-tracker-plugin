@@ -25,11 +25,10 @@
         }
     },
     "devDependencies": {
-        "jest": "^26.6.3",
-        "posthog-plugins": "^0.2.2"
+        "jest": "^26.6.3"
     },
     "dependencies": {
-        "@posthog/plugin-scaffold": "^0.5.0",
+        "@posthog/plugin-scaffold": "^0.10.0",
         "@types/jest": "^26.0.22",
         "@types/node": "^14.14.41",
         "ts-jest": "^26.5.5",

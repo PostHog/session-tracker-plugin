@@ -1,72 +1,67 @@
-import { PluginEvent, PluginMeta, PluginAttachment } from '@posthog/plugin-scaffold'
+import { Plugin } from '@posthog/plugin-scaffold'
 
 declare var posthog: {
-    capture: (eventName: string, properties: Record<string,any>) => void
+    capture: (eventName: string, properties: Record<string, any>) => void
 }
 
-async function processEvent(event: PluginEvent, { storage }: PluginMeta) {
-    if (['session_started', 'session_ended'].includes(event.event)) {
-        return event
+type SessionTrackerPlugin = Plugin<{
+    config: {
+        sessionLength: string
+        sessionStartEvent: string
+        sessionEndEvent: string
     }
-
-    const THIRTY_MINUTES = 1000*60*30
-
-    // Last event by the user
-    const userLastSeen = await storage.get(`last_seen_${event.distinct_id}`, 0) as number
-
-    // Last registered session_start by the user 
-    const userLastSessionStarted = await storage.get(`last_session_started_${event.distinct_id}`, 0) as number
-
-    let isFirstEventInSession = false
-
-    if (!event.properties) {
-        event['properties'] = {}
+    global: {
+        sessionLength: number
+        sessionStartEvent: string
+        sessionEndEvent: string
     }
+    jobs: {
+        checkIfSessionIsOver: { distinct_id: string }
+    }
+}>
 
-    const timestamp = event.timestamp
+export const setupPlugin: SessionTrackerPlugin['setupPlugin'] = ({ global, config }) => {
+    global.sessionLength = parseInt(config.sessionLength) || 30
+    global.sessionStartEvent = config.sessionStartEvent || 'Session start'
+    global.sessionEndEvent = config.sessionEndEvent || 'Session end'
+}
 
-    if (timestamp) {
-        const parsedTimestamp = new Date(timestamp).getTime()
-        const timeSinceLastSeen = parsedTimestamp - userLastSeen
-        isFirstEventInSession = timeSinceLastSeen > THIRTY_MINUTES
+export const onEvent: SessionTrackerPlugin['onEvent'] = async (event, { cache, global, jobs }) => {
+    // skip this for the session start/end events
+    if (event.event === global.sessionStartEvent || event.event === global.sessionEndEvent) {
+        return
+    }
+    // check if we're the first one to increment this key in the last ${global.sessionLength} minutes
+    if ((await cache.incr(`session_${event.distinct_id}`)) === 1) {
+        // if so, dispatch a session start event
+        posthog.capture(global.sessionStartEvent, { distinct_id: event.distinct_id, timestamp: event.timestamp })
+        // and launch a job to check in 30min if the session is still alive
+        await jobs.checkIfSessionIsOver({ distinct_id: event.distinct_id }).runIn(global.sessionLength, 'minutes')
+    }
+    // make the key expire in ${global.sessionLength} min
+    await cache.expire(`session_${event.distinct_id}`, global.sessionLength * 60)
+    await cache.set(
+        `last_timestamp_${event.distinct_id}`,
+        event.timestamp || event.now || event.sent_at || new Date().toISOString()
+    )
+}
 
-        storage.set(`last_seen_${event.distinct_id}`, parsedTimestamp)
+export const jobs: SessionTrackerPlugin['jobs'] = {
+    // a background job to check if a session is still in progress
+    checkIfSessionIsOver: async ({ distinct_id }, { jobs, cache, global }) => {
+        // check if there's a key that has not expired
+        const ping = await cache.get(`session_${distinct_id}`, undefined)
+        if (!ping) {
+            // if it expired, dispatch the session end event
+            const timestamp =
+                (await cache.get(`last_timestamp_${distinct_id}`, undefined)) ||
+                new Date(new Date().valueOf() - global.sessionLength * 60000).toISOString()
 
-        // If it's been over 30min since the user had an event, it's a new session
-        if (isFirstEventInSession) {
-            posthog.capture(
-                'session_started', 
-                { 
-                    distinct_id: event.distinct_id, 
-                    time_since_last_seen: !userLastSeen ? 0 : timeSinceLastSeen,
-                    // backdate to when session _actually_ started
-                    timestamp: new Date(timestamp).toISOString(), 
-                    trigger_event: event.event
-                }
-            )
-            storage.set(`last_session_started_${event.distinct_id}`, parsedTimestamp)
-
-            // If we've started a new session, another session must have ended
-            if (userLastSessionStarted) {
-                posthog.capture(
-                    'session_ended',
-                    {
-                        // backdate the session end to the timestamp last event before the new session
-                        timestamp: new Date(userLastSeen).toISOString(), 
-                        distinct_id: event.distinct_id, 
-                        session_duration: userLastSeen - userLastSessionStarted
-                    }
-                )
-            }
+            await cache.set(`last_timestamp_${distinct_id}`, undefined)
+            posthog.capture(global.sessionEndEvent, { distinct_id, timestamp })
+        } else {
+            // if the key is still there, check again in a minute
+            await jobs.checkIfSessionIsOver({ distinct_id }).runIn(1, 'minute')
         }
-        
-    }
-
-    event.properties['is_first_event_in_session'] = isFirstEventInSession
-
-    return event
-}
-
-module.exports = {
-    processEvent,
+    },
 }
